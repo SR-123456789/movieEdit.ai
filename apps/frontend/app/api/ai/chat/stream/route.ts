@@ -6,7 +6,7 @@ const MODEL_NAME = 'gemini-1.5-flash';
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json();
+    const { messages,projectState } = await req.json();
     if (!process.env.GEMINI_API_KEY) {
       return new Response(JSON.stringify({ error: 'Missing GEMINI_API_KEY' }), { status: 500 });
     }
@@ -20,7 +20,9 @@ export async function POST(req: NextRequest) {
     const systemIntro = `あなたは動画編集支援AIです。タイムライン最適化、ショート抽出、無音検出、Bロール提案などを行う。`;    
     const historyText = messages.slice(0, -1).map((m: any) => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.content}`).join('\n');
     const latest = messages[messages.length - 1];
-    const prompt = `${systemIntro}\nこれまで:\n${historyText}\n---\nユーザー最新:\n${latest.content}\n\n出力は日本語。段階的に候補を提示し、重要語には*...*で軽い強調。`;
+    const prompt = `${systemIntro}\nこれまで:\n${historyText}\n---\nユーザー最新:\n${latest.content}\n\n出力は日本語。段階的に候補を提示し、重要語には*...*で軽い強調。現在のプロジェクトの状態:${JSON.stringify(projectState)}`;
+
+    console.log("Prompt:", prompt);
 
     const streamResult: GenerateContentStreamResult = await model.generateContentStream({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
 

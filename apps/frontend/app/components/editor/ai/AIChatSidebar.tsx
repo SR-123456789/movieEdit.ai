@@ -1,4 +1,5 @@
 "use client";
+import { useAppSelector } from "@/app/store";
 import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
 
 // Copilot風 AI チャットサイドバー（モック実装）
@@ -37,6 +38,8 @@ const Avator: React.FC<{ role: ChatMessage["role"]; thinking?: boolean }> = ({ r
 };
 
 export const AIChatSidebar: React.FC = () => {
+  const projectState = useAppSelector((state) => state.projectState);
+  
   const [messages, setMessages] = useState<ChatMessage[]>([{
     id: crypto.randomUUID(),
     role: "assistant",
@@ -70,7 +73,7 @@ export const AIChatSidebar: React.FC = () => {
       const res = await fetch('/api/ai/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({ messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })) ,projectState}),
         signal: controller.signal
       });
       if (!res.ok) {
