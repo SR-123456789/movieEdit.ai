@@ -22,6 +22,9 @@ import { MediaFile } from "@/app/types";
 import ExportList from "../../../components/editor/AssetsPanel/tools-section/ExportList";
 import Image from "next/image";
 import ProjectName from "../../../components/editor/player/ProjectName";
+import React from "react";
+import AIChatSidebar from "@/app/components/editor/ai/AIChatSidebar";
+
 export default function Project({ params }: { params: { id: string } }) {
     const { id } = params;
     const dispatch = useAppDispatch();
@@ -85,7 +88,7 @@ export default function Project({ params }: { params: { id: string } }) {
     };
 
     return (
-        <div className="flex flex-col h-screen select-none">
+        <div className="flex flex-col h-screen select-none pr-[320px]">{/* 右側チャット分余白 */}
             {/* Loading screen */}
             {
                 isLoading ? (
@@ -209,6 +212,7 @@ export default function Project({ params }: { params: { id: string } }) {
                 </div>
                 <Timeline />
             </div>
+            <AIChatSidebar />
         </div >
     );
 }
