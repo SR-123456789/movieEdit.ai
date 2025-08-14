@@ -1,50 +1,55 @@
-## Overview
+## 概要
 
-This is an online video editor built with nextjs, remotion for real-time preview and ffmpeg (web assembly port) for high-quality render.
+このプロジェクトは、Next.js、Remotionを使用したリアルタイムプレビュー機能と、ffmpeg（WebAssembly版）を活用した高品質なレンダリング機能を備えたオンライン動画編集ツールです。
 
-## Features
+## 機能
 
-- 🎞️ Real-time Preview: See immediate previews of edits.
-- 🧰 Render with ffmpeg (web assembly port) with various options supports up to 1080p export.
-- 🕹️ Interactive Timeline Editor: Precisely arrange, trim, and control media through a custom-built timeline.
-- ✂️ Element Utilities: Easily split, duplicate, and manage individual media layers.
-- 🖼️ Flexible Media Support: Import and mix videos, audio tracks, images, and text elements seamlessly.
-- 🛠️ Advanced Element Controls: Adjust properties like position, opacity, z-index and volume per element.
-- ⌨️ Keyboard Shortcuts: Quickly play, mute, move in time with arrows, split, duplicate, etc .
+- 🎞️ **リアルタイムプレビュー**: 編集内容を即座にプレビュー可能。
+- 🧰 **ffmpegによるレンダリング**: WebAssembly版を使用し、最大1080pのエクスポートをサポート。
+- 🕹️ **インタラクティブなタイムラインエディタ**: メディアを正確に配置、トリム、制御可能なカスタムタイムライン。
+- ✂️ **エレメントユーティリティ**: メディアレイヤーの分割、複製、管理が簡単。
+- 🖼️ **柔軟なメディアサポート**: 動画、音声トラック、画像、テキスト要素をシームレスにインポート・ミックス可能。
+- 🛠️ **高度なエレメントコントロール**: 各エレメントの位置、不透明度、z-index、音量などを調整可能。
+- ⌨️ **キーボードショートカット**: 再生、ミュート、時間移動、分割、複製などを迅速に操作可能。
 
 ![Alt Text](/images/image.png)
 
-## Installation
+## インストール
 
-Clone the repo, install dependencies:
+リポジトリをクローンし、依存関係をインストールします：
 
 ```bash
 npm install
 ```
-Then run the development server:
+その後、開発サーバーを起動します：
 ```bash
 npm run dev
 ```
-Or build and start in production mode:
+または、プロダクションモードでビルドして起動します：
 
 ```bash
 npm run build
 npm start
 ```
 
-Alternatively, use Docker:
+または、Dockerを使用することも可能です：
 
 ```bash
-# Build the Docker image
+# Dockerイメージをビルド
 docker build -t clipjs .
 
-# Run the container
+# コンテナを実行
 docker run -p 3000:3000 clipjs
 ```
-Then navigate to [http://localhost:3000](http://localhost:3000)
+その後、[http://localhost:3000](http://localhost:3000) にアクセスしてください。
 
-## TODOs
+## AIアシスタント機能
 
-Prioritized tasks are listed in [TODO.md](./TODO.md). 
+このプロジェクトには、動画編集作業を支援するAIアシスタント機能が含まれています。AIアシスタントは以下のようなタスクをサポートします：
 
-contributions are welcomed!
+- **リアルタイム提案**: タイムライン上での盛り上がりポイント、不要な間延び、カット候補を自動的に解析し提案します。
+- **自動実行**: 提案された編集内容をワンクリックで適用可能。
+- **学習機能**: ユーザーの編集履歴や傾向を学習し、提案精度を向上させます。
+- **ショート動画生成**: 長尺動画からハイライト部分を自動抽出し、TikTokやYouTube Shorts向けのショート動画を生成します。
+
+これにより、編集時間を大幅に短縮し、映像クオリティを向上させることが可能です。
