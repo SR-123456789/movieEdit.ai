@@ -52,47 +52,22 @@ export const AIChatSidebar: React.FC = () => {
     containerRef.current.scrollTop = containerRef.current.scrollHeight;
   }, [messages]);
 
-  const abortRef = useRef<AbortController | null>(null);
-
-  const send = async () => {
+  const send = () => {
     const trimmed = input.trim();
     if (!trimmed) return;
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortRef.current = controller;
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: trimmed };
-    const placeholder: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: "Gemini思考中...", thinking: true };
-    setMessages(prev => [...prev, userMsg, placeholder]);
+    // プレースホルダ（thinking）
+    const placeholder: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: "思考中...", thinking: true };
+    setMessages((prev) => [...prev, userMsg, placeholder]);
     setInput("");
-    try {
-      const res = await fetch('/api/ai/chat/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })) }),
-        signal: controller.signal
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let accum = "";
-      if (!reader) throw new Error('No reader');
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        accum += decoder.decode(value, { stream: true });
-        const partial = accum;
-        setMessages(prev => prev.map(m => m.id === placeholder.id ? { ...m, thinking: false, content: partial } : m));
-      }
-      // 最終 flush
-      setMessages(prev => prev.map(m => m.id === placeholder.id ? { ...m, thinking: false, content: accum } : m));
-    } catch (e: any) {
-      if (e.name === 'AbortError') return;
-      setMessages(prev => prev.map(m => m.id === placeholder.id ? { ...m, thinking: false, content: `エラー: ${e.message}` } : m));
-    }
+    // 疑似LLM応答
+    setTimeout(() => {
+      setMessages((prev) => prev.map(m => m.id === placeholder.id ? {
+        ...m,
+        thinking: false,
+        content: `（モック応答）『${trimmed.slice(0, 40)}』に基づく提案: \n- ここで無音区間を検出しカット候補を表示予定\n- Bロール挿入ポイント分析（将来実装）\n- 要約生成 / ショート抽出（後続実装）`
+      } : m));
+    }, 600);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -116,7 +91,7 @@ export const AIChatSidebar: React.FC = () => {
       >
         <header className="h-11 shrink-0 flex items-center justify-between px-4 border-b border-gray-800 text-[13px] tracking-wide font-medium text-gray-200">
           <span className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-indigo-600/40 text-indigo-200 text-[11px] border border-indigo-500/40">Gemini</span>
+            <span className="px-2 py-0.5 rounded bg-indigo-600/40 text-indigo-200 text-[11px] border border-indigo-500/40">Mock</span>
             AI アシスタント
           </span>
         </header>
@@ -146,7 +121,7 @@ export const AIChatSidebar: React.FC = () => {
               className="w-full bg-transparent outline-none resize-none p-2 text-[13px] h-24 leading-relaxed text-gray-200 placeholder-gray-500"
             />
             <div className="flex items-center justify-between px-2 pb-2 text-[11px] text-gray-500">
-              <span>{input.trim() ? "Enterで送信" : "入力待ち"}</span>
+              <span>{input.trim() ? "送信可能" : "入力待ち"}</span>
               <button
                 onClick={send}
                 disabled={!input.trim()}
