@@ -225,3 +225,25 @@ export const splitClipByIdAtSourceTime = (id: string, sourceSec: number) => (dis
   dispatch(setActiveElement(null));
   toast.success('Element split successfully.');
 };
+
+// Delete element by id (media or text). If not found, no-op with toast.
+export const deleteElementById = (id: string) => (dispatch: AppDispatch, getState: () => RootState) => {
+  const { mediaFiles, textElements } = getState().projectState;
+  const mediaIdx = mediaFiles.findIndex(m => m.id === id);
+  if (mediaIdx >= 0) {
+    const next = mediaFiles.filter(m => m.id !== id);
+    dispatch(setMediaFiles(next));
+    dispatch(setActiveElement(null));
+    toast.success('Element deleted successfully.');
+    return;
+  }
+  const textIdx = textElements.findIndex(t => t.id === id);
+  if (textIdx >= 0) {
+    const next = textElements.filter(t => t.id !== id);
+    dispatch(setTextElements(next));
+    dispatch(setActiveElement(null));
+    toast.success('Element deleted successfully.');
+    return;
+  }
+  toast.error('Element not found.');
+};

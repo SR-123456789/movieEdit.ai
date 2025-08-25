@@ -1,6 +1,6 @@
 "use client";
 import { useAppSelector, useAppDispatch, store } from "@/app/store";
-import { splitAtCurrentTime, deleteActiveElement, duplicateActiveElement, splitClipByIdAtSourceTime } from "@/app/store/thunks/editorThunks";
+import { splitAtCurrentTime, deleteActiveElement, duplicateActiveElement, splitClipByIdAtSourceTime, deleteElementById } from "@/app/store/thunks/editorThunks";
 import { setCurrentTime } from "@/app/store/slices/projectSlice";
 import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
 
@@ -84,10 +84,20 @@ export const AIChatSidebar: React.FC = () => {
           dispatch(splitAtCurrentTime());
           break;
         }
-        // 予備: 将来拡張
-        case 'delete_active':
+        // delete: id指定があれば優先。無ければ delete_active の後方互換を使う
+        case 'delete': {
+          const id: string | undefined = cmd?.target?.id;
+          if (id) {
+            dispatch(deleteElementById(id) as any);
+          } else {
+            dispatch(deleteActiveElement());
+          }
+          break;
+        }
+        case 'delete_active': {
           dispatch(deleteActiveElement());
           break;
+        }
         case 'duplicate_active':
           dispatch(duplicateActiveElement());
           break;

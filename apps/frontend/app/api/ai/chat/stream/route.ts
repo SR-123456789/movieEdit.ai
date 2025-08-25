@@ -21,7 +21,7 @@ const SYSTEM_INSTRUCTION = `あなたは動画編集支援AIです。出力は�
   "continueNumber": number,        // 連続で continue した回数。クライアントが送ってくる値を基準に増加
   "commands": [
     {
-      "type": "cut" | "insert_broll" | "add_captions" | "detect_silence" | "extract_short" | "speed_change" | "volume_adjust",
+  "type": "cut" | "delete" | "insert_broll" | "add_captions" | "detect_silence" | "extract_short" | "speed_change" | "volume_adjust",
       "target": { "track": "main" | "audio" | "broll", "start_ms"?: number, "end_ms"?: number ,id?: string},
       "params"?: { [k: string]: any },
       "confidence"?: number
@@ -46,6 +46,11 @@ projectStatus:{
   targetに { id: クリップID }、paramsに { targetTime: カット位置(秒, クリップのソース時間) } を指定してください。
   必ず、startTime < targetTime< endTimeにしてください。
   カットされたクリップは二つに分割され, それぞれのクリップは新しいIDを持ちます。
+
+- delete:クリップを削除します。
+  target に { id: クリップID } を指定してください。
+  可能であれば id 指定を優先し、曖昧な delete_active は避けてください。
+  指定IDが存在しない場合は何もしないでください。
 
 [継続出力のルール]
 - 1回の応答で完了できない場合は "continue": true を返す。
