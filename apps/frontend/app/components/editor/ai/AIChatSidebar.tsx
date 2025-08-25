@@ -1,6 +1,6 @@
 "use client";
 import { useAppSelector, useAppDispatch } from "@/app/store";
-import { splitAtCurrentTime, deleteActiveElement, duplicateActiveElement } from "@/app/store/thunks/editorThunks";
+import { splitAtCurrentTime, deleteActiveElement, duplicateActiveElement, splitClipByIdAtSourceTime } from "@/app/store/thunks/editorThunks";
 import { setCurrentTime } from "@/app/store/slices/projectSlice";
 import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
 
@@ -67,16 +67,19 @@ export const AIChatSidebar: React.FC = () => {
     for (const cmd of cmds) {
       switch (cmd?.type) {
         case 'cut': {
+          const id: string | undefined = cmd?.target?.id;
+          const targetTime: any = cmd?.params?.targetTime;
+          if (id && targetTime != null && !Number.isNaN(Number(targetTime))) {
+            // プロンプト仕様: targetTime は source の秒と扱う
+            const sourceSec = Number(targetTime);
+            dispatch(splitClipByIdAtSourceTime(id, sourceSec) as any);
+            break;
+          }
+          // フォールバック: start_ms/end_ms が来たらタイムライン時刻に合わせて従来の分割
           let ms: number | undefined = undefined;
-          if (cmd?.target?.start_ms != null && !Number.isNaN(cmd.target.start_ms)) {
-            ms = Number(cmd.target.start_ms);
-          } else if (cmd?.target?.end_ms != null && !Number.isNaN(cmd.target.end_ms)) {
-            ms = Number(cmd.target.end_ms);
-          }
-          if (ms != null) {
-            const sec = Math.max(0, ms / 1000);
-            dispatch(setCurrentTime(sec));
-          }
+          if (cmd?.target?.start_ms != null && !Number.isNaN(cmd.target.start_ms)) ms = Number(cmd.target.start_ms);
+          else if (cmd?.target?.end_ms != null && !Number.isNaN(cmd.target.end_ms)) ms = Number(cmd.target.end_ms);
+          if (ms != null) dispatch(setCurrentTime(Math.max(0, ms / 1000)));
           dispatch(splitAtCurrentTime());
           break;
         }

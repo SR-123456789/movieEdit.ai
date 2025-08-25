@@ -10,14 +10,14 @@ export const splitAtCurrentTime = () => (dispatch: AppDispatch, getState: () => 
 
   // 自動対象選択（未選択の場合、currentTimeに重なる要素を優先順で選択）
   if (!activeElement) {
-    const mediaIdx = mediaFiles.findIndex(e => currentTime > e.positionStart && currentTime < e.positionEnd);
+    const mediaIdx = mediaFiles.findIndex(e => currentTime >= e.positionStart && currentTime <= e.positionEnd);
     if (mediaIdx >= 0) {
       dispatch(setActiveElement('media'));
       dispatch(setActiveElementIndex(mediaIdx));
       activeElement = 'media';
       activeElementIndex = mediaIdx;
     } else {
-      const textIdx = textElements.findIndex(e => currentTime > e.positionStart && currentTime < e.positionEnd);
+      const textIdx = textElements.findIndex(e => currentTime >= e.positionStart && currentTime <= e.positionEnd);
       if (textIdx >= 0) {
         dispatch(setActiveElement('text'));
         dispatch(setActiveElementIndex(textIdx));
@@ -169,4 +169,59 @@ export const deleteActiveElement = () => (dispatch: AppDispatch, getState: () =>
     return;
   }
   toast.error('No element selected.');
+};
+
+// Split specific media clip by source time (params.targetTime)
+// Requires: sourceSec strictly between element.startTime and element.endTime
+export const splitClipByIdAtSourceTime = (id: string, sourceSec: number) => (dispatch: AppDispatch, getState: () => RootState) => {
+  const { mediaFiles } = getState().projectState;
+  const idx = mediaFiles.findIndex(m => m.id === id);
+  if (idx < 0) {
+    toast.error('Clip not found.');
+    return;
+  }
+  const element = mediaFiles[idx];
+  const { startTime, endTime, positionStart, positionEnd } = element;
+
+  if (!(Number.isFinite(sourceSec))) {
+    toast.error('Invalid cut time.');
+    return;
+  }
+  // Enforce: cut only within source start/end
+  if (!(sourceSec > startTime && sourceSec < endTime)) {
+    toast.error('Cut time must be between startTime and endTime.');
+    return;
+  }
+  const sourceDuration = endTime - startTime;
+  if (!(sourceDuration > 0)) {
+    toast.error('Invalid clip duration.');
+    return;
+  }
+  const positionDuration = positionEnd - positionStart;
+  const ratio = (sourceSec - startTime) / sourceDuration; // 0..1
+  const timelineSplit = positionStart + ratio * positionDuration;
+
+  // Build two parts
+  const firstPart: MediaFile = {
+    ...element,
+    id: crypto.randomUUID(),
+    positionStart,
+    positionEnd: timelineSplit,
+    startTime,
+    endTime: sourceSec,
+  };
+  const secondPart: MediaFile = {
+    ...element,
+    id: crypto.randomUUID(),
+    positionStart: timelineSplit,
+    positionEnd,
+    startTime: sourceSec,
+    endTime,
+  };
+
+  const next = [...mediaFiles];
+  next.splice(idx, 1, firstPart, secondPart);
+  dispatch(setMediaFiles(next));
+  dispatch(setActiveElement(null));
+  toast.success('Element split successfully.');
 };

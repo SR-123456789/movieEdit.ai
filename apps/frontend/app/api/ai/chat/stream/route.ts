@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { GoogleGenerativeAI, type GenerateContentStreamResult } from '@google/generative-ai';
 
 export const runtime = 'nodejs';
-const MODEL_NAME = 'gemini-1.5-flash';
+const MODEL_NAME = 'gemini-2.5-flash';
 
 type Msg = { role: 'user'|'assistant'|'system'|'tool'; content: string };
 
@@ -20,13 +20,31 @@ const SYSTEM_INSTRUCTION = `あなたは動画編集支援AIです。出力は�
   "commands": [
     {
       "type": "cut" | "insert_broll" | "add_captions" | "detect_silence" | "extract_short" | "speed_change" | "volume_adjust",
-      "target": { "track": "main" | "audio" | "broll", "start_ms"?: number, "end_ms"?: number },
+      "target": { "track": "main" | "audio" | "broll", "start_ms"?: number, "end_ms"?: number ,id?: string},
       "params"?: { [k: string]: any },
       "confidence"?: number
     }
   ]
 }
 [CMD_JSON_END]
+
+[プロジェクトの情報]
+projectStatus:{
+  mediaFiles:[
+    {
+      id:クリップID,
+      startTime:クリップのソース開始時間(秒),
+      endTime:クリップのソース終了時間(秒)
+    }
+  ]
+}
+
+[command使い方]
+- cut:クリップをカットします。
+  targetに { id: クリップID }、paramsに { targetTime: カット位置(秒, クリップのソース時間) } を指定してください。
+  必ず、startTime < targetTime< endTimeにしてください。
+  カッ  トされたクリップは二つに分割され, それぞれのクリップは新しいIDを持ちます。
+
 
 【制約】
 - 不明点は推測しない。分からなければ commands は空配列に。
