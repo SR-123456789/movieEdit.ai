@@ -247,3 +247,51 @@ export const deleteElementById = (id: string) => (dispatch: AppDispatch, getStat
   }
   toast.error('Element not found.');
 };
+
+// Move element by id horizontally on the timeline. Supports absolute toPositionStart or relative deltaSeconds.
+export const moveClipById = (id: string, opts: { toPositionStart?: number; deltaSeconds?: number }) => (dispatch: AppDispatch, getState: () => RootState) => {
+  const state = getState().projectState;
+  const { mediaFiles, textElements } = state;
+
+  const mIdx = mediaFiles.findIndex(m => m.id === id);
+  if (mIdx >= 0) {
+    const items = [...mediaFiles];
+    const el = items[mIdx];
+    const len = el.positionEnd - el.positionStart;
+    let newStart = el.positionStart;
+    if (typeof opts.toPositionStart === 'number' && Number.isFinite(opts.toPositionStart)) {
+      newStart = opts.toPositionStart as number;
+    } else if (typeof opts.deltaSeconds === 'number' && Number.isFinite(opts.deltaSeconds)) {
+      newStart = el.positionStart + (opts.deltaSeconds as number);
+    }
+  // clamp lower bound to 0 (upper bound will auto-extend project duration)
+    if (!Number.isFinite(newStart)) return;
+    if (newStart < 0) newStart = 0;
+  const newEnd = newStart + len;
+    items[mIdx] = { ...el, positionStart: newStart, positionEnd: newEnd };
+    dispatch(setMediaFiles(items));
+    toast.success('Clip moved.');
+    return;
+  }
+
+  const tIdx = textElements.findIndex(t => t.id === id);
+  if (tIdx >= 0) {
+    const items = [...textElements];
+    const el = items[tIdx];
+    const len = el.positionEnd - el.positionStart;
+    let newStart = el.positionStart;
+    if (typeof opts.toPositionStart === 'number' && Number.isFinite(opts.toPositionStart)) {
+      newStart = opts.toPositionStart as number;
+    } else if (typeof opts.deltaSeconds === 'number' && Number.isFinite(opts.deltaSeconds)) {
+      newStart = el.positionStart + (opts.deltaSeconds as number);
+    }
+  if (!Number.isFinite(newStart)) return;
+  if (newStart < 0) newStart = 0;
+  const newEnd = newStart + len;
+    items[tIdx] = { ...el, positionStart: newStart, positionEnd: newEnd };
+    dispatch(setTextElements(items));
+    toast.success('Element moved.');
+    return;
+  }
+  toast.error('Element not found.');
+};

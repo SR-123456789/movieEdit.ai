@@ -21,7 +21,7 @@ const SYSTEM_INSTRUCTION = `あなたは動画編集支援AIです。出力は�
   "continueNumber": number,        // 連続で continue した回数。クライアントが送ってくる値を基準に増加
   "commands": [
     {
-  "type": "cut" | "delete" | "insert_broll" | "add_captions" | "detect_silence" | "extract_short" | "speed_change" | "volume_adjust",
+  "type": "cut" | "delete" | "move" | "insert_broll" | "add_captions" | "detect_silence" | "extract_short" | "speed_change" | "volume_adjust",
       "target": { "track": "main" | "audio" | "broll", "start_ms"?: number, "end_ms"?: number ,id?: string},
       "params"?: { [k: string]: any },
       "confidence"?: number
@@ -51,6 +51,12 @@ projectStatus:{
   target に { id: クリップID } を指定してください。
   可能であれば id 指定を優先し、曖昧な delete_active は避けてください。
   指定IDが存在しない場合は何もしないでください。
+
+- move: クリップをタイムライン上で横移動します（開始位置を変更）。
+  target に { id: クリップID } を指定し、params に以下のいずれかを指定してください。
+  - { toPositionStart: タイムライン上の開始位置(秒) } ・・・絶対指定（推奨）
+  - { deltaSeconds: クリップを移動する相対秒数 } ・・・相対指定（正で後ろ、負で前）
+  クリップの長さは保持されます。開始位置は0秒未満にしないでください。
 
 [継続出力のルール]
 - 1回の応答で完了できない場合は "continue": true を返す。

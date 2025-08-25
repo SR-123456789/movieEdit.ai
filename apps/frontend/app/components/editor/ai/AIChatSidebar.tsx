@@ -1,6 +1,6 @@
 "use client";
 import { useAppSelector, useAppDispatch, store } from "@/app/store";
-import { splitAtCurrentTime, deleteActiveElement, duplicateActiveElement, splitClipByIdAtSourceTime, deleteElementById } from "@/app/store/thunks/editorThunks";
+import { splitAtCurrentTime, deleteActiveElement, duplicateActiveElement, splitClipByIdAtSourceTime, deleteElementById, moveClipById } from "@/app/store/thunks/editorThunks";
 import { setCurrentTime } from "@/app/store/slices/projectSlice";
 import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
 
@@ -82,6 +82,18 @@ export const AIChatSidebar: React.FC = () => {
           else if (cmd?.target?.end_ms != null && !Number.isNaN(cmd.target.end_ms)) ms = Number(cmd.target.end_ms);
           if (ms != null) dispatch(setCurrentTime(Math.max(0, ms / 1000)));
           dispatch(splitAtCurrentTime());
+          break;
+        }
+        case 'move': {
+          const id: string | undefined = cmd?.target?.id;
+          const toPos = cmd?.params?.toPositionStart;
+          const delta = cmd?.params?.deltaSeconds;
+          if (id && (toPos != null || delta != null)) {
+            const opts: any = {};
+            if (toPos != null && Number.isFinite(Number(toPos))) opts.toPositionStart = Number(toPos);
+            if (delta != null && Number.isFinite(Number(delta))) opts.deltaSeconds = Number(delta);
+            dispatch(moveClipById(id, opts) as any);
+          }
           break;
         }
         // delete: id指定があれば優先。無ければ delete_active の後方互換を使う
