@@ -1,7 +1,7 @@
-import { useAppSelector } from "@/app/store";
-import { setMarkerTrack, setTextElements, setMediaFiles, setTimelineZoom, setCurrentTime, setIsPlaying, setActiveElement } from "@/app/store/slices/projectSlice";
+/* eslint-disable react/forbid-dom-props */
+import { useAppSelector, useAppDispatch } from "@/app/store";
+import { setMarkerTrack, setTimelineZoom, setCurrentTime, setIsPlaying } from "@/app/store/slices/projectSlice";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
-import { useDispatch } from "react-redux";
 import Image from "next/image";
 import Header from "./Header";
 import VideoTimeline from "./elements-timeline/VideoTimeline";
@@ -11,9 +11,10 @@ import TextTimeline from "./elements-timeline/TextTimeline";
 import { throttle } from 'lodash';
 import GlobalKeyHandlerProps from "../../../components/editor/keys/GlobalKeyHandlerProps";
 import toast from "react-hot-toast";
+import { deleteActiveElement, duplicateActiveElement, splitAtCurrentTime } from "@/app/store/thunks/editorThunks";
 export const Timeline = () => {
     const { currentTime, timelineZoom, enableMarkerTracking, activeElement, activeElementIndex, mediaFiles, textElements, duration, isPlaying } = useAppSelector((state) => state.projectState);
-    const dispatch = useDispatch();
+    const dispatch = useAppDispatch();
     const timelineRef = useRef<HTMLDivElement>(null)
 
     const throttledZoom = useMemo(() =>
@@ -24,167 +25,15 @@ export const Timeline = () => {
     );
 
     const handleSplit = () => {
-        let element = null;
-        let elements = null;
-        let setElements = null;
-
-        if (!activeElement) {
-            toast.error('No element selected.');
-            return;
-        }
-
-        if (activeElement === 'media') {
-            elements = [...mediaFiles];
-            element = elements[activeElementIndex];
-            setElements = setMediaFiles;
-
-            if (!element) {
-                toast.error('No element selected.');
-                return;
-            }
-
-            const { positionStart, positionEnd } = element;
-
-            if (currentTime <= positionStart || currentTime >= positionEnd) {
-                toast.error('Marker is outside the selected element bounds.');
-                return;
-            }
-
-            const positionDuration = positionEnd - positionStart;
-
-            // Media logic (uses startTime/endTime for trimming)
-            const { startTime, endTime } = element;
-            const sourceDuration = endTime - startTime;
-            const ratio = (currentTime - positionStart) / positionDuration;
-            const splitSourceOffset = startTime + ratio * sourceDuration;
-
-            const firstPart = {
-                ...element,
-                id: crypto.randomUUID(),
-                positionStart,
-                positionEnd: currentTime,
-                startTime,
-                endTime: splitSourceOffset
-            };
-
-            const secondPart = {
-                ...element,
-                id: crypto.randomUUID(),
-                positionStart: currentTime,
-                positionEnd,
-                startTime: splitSourceOffset,
-                endTime
-            };
-
-            elements.splice(activeElementIndex, 1, firstPart, secondPart);
-        } else if (activeElement === 'text') {
-            elements = [...textElements];
-            element = elements[activeElementIndex];
-            setElements = setTextElements;
-
-            if (!element) {
-                toast.error('No element selected.');
-                return;
-            }
-
-            const { positionStart, positionEnd } = element;
-
-            if (currentTime <= positionStart || currentTime >= positionEnd) {
-                toast.error('Marker is outside the selected element.');
-                return;
-            }
-
-            const firstPart = {
-                ...element,
-                id: crypto.randomUUID(),
-                positionStart,
-                positionEnd: currentTime,
-            };
-
-            const secondPart = {
-                ...element,
-                id: crypto.randomUUID(),
-                positionStart: currentTime,
-                positionEnd,
-            };
-
-            elements.splice(activeElementIndex, 1, firstPart, secondPart);
-        }
-
-        if (elements && setElements) {
-            dispatch(setElements(elements as any));
-            dispatch(setActiveElement(null));
-            toast.success('Element split successfully.');
-        }
+        dispatch(splitAtCurrentTime());
     };
 
     const handleDuplicate = () => {
-        let element = null;
-        let elements = null;
-        let setElements = null;
-
-        if (activeElement === 'media') {
-            elements = [...mediaFiles];
-            element = elements[activeElementIndex];
-            setElements = setMediaFiles;
-        } else if (activeElement === 'text') {
-            elements = [...textElements];
-            element = elements[activeElementIndex];
-            setElements = setTextElements;
-        }
-
-        if (!element) {
-            toast.error('No element selected.');
-            return;
-        }
-
-        const duplicatedElement = {
-            ...element,
-            id: crypto.randomUUID(),
-        };
-
-        if (elements) {
-            elements.splice(activeElementIndex + 1, 0, duplicatedElement as any);
-        }
-
-        if (elements && setElements) {
-            dispatch(setElements(elements as any));
-            dispatch(setActiveElement(null));
-            toast.success('Element duplicated successfully.');
-        }
+        dispatch(duplicateActiveElement());
     };
 
     const handleDelete = () => {
-        // @ts-ignore
-        let element = null;
-        let elements = null;
-        let setElements = null;
-
-        if (activeElement === 'media') {
-            elements = [...mediaFiles];
-            element = elements[activeElementIndex];
-            setElements = setMediaFiles;
-        } else if (activeElement === 'text') {
-            elements = [...textElements];
-            element = elements[activeElementIndex];
-            setElements = setTextElements;
-        }
-
-        if (!element) {
-            toast.error('No element selected.');
-            return;
-        }
-
-        if (elements) {
-            // @ts-ignore
-            elements = elements.filter(ele => ele.id !== element.id)
-        }
-
-        if (elements && setElements) {
-            dispatch(setElements(elements as any));
-            dispatch(setActiveElement(null));
-            toast.success('Element deleted successfully.');
-        }
+        dispatch(deleteActiveElement());
     };
 
 
@@ -273,7 +122,7 @@ export const Timeline = () => {
 
                 {/* Timeline Zoom */}
                 <div className="flex flex-row justify-between items-center gap-2 mr-4">
-                    <label className="block text-sm mt-1 font-semibold text-white">Zoom</label>
+                    <label htmlFor="timelineZoomRange" className="block text-sm mt-1 font-semibold text-white">Zoom</label>
                     <span className="text-white text-lg">-</span>
                     <input
                         type="range"
@@ -281,6 +130,8 @@ export const Timeline = () => {
                         max={120}
                         step="1"
                         value={timelineZoom}
+                        id="timelineZoomRange"
+                        aria-label="Timeline Zoom"
                         onChange={(e) => throttledZoom(Number(e.target.value))}
                         className="w-[100px] bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:border-white-500"
                     />
@@ -296,13 +147,9 @@ export const Timeline = () => {
                 {/* Timeline Header */}
                 <Header />
 
-                <div className="bg-[#1E1D21]"
-
-                    style={{
-                        width: "100%", /* or whatever width your timeline requires */
-                    }}
-                >
+                <div className="bg-[#1E1D21] w-full">
                     {/* Timeline cursor */}
+                    {/* eslint-disable-next-line */}
                     <div
                         className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-50"
                         style={{

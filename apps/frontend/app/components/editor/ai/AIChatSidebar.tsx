@@ -1,5 +1,7 @@
 "use client";
-import { useAppSelector } from "@/app/store";
+import { useAppSelector, useAppDispatch } from "@/app/store";
+import { splitAtCurrentTime, deleteActiveElement, duplicateActiveElement } from "@/app/store/thunks/editorThunks";
+import { setCurrentTime } from "@/app/store/slices/projectSlice";
 import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
 
 // Copilot風 AI チャットサイドバー（モック実装）
@@ -39,6 +41,7 @@ const Avator: React.FC<{ role: ChatMessage["role"]; thinking?: boolean }> = ({ r
 
 export const AIChatSidebar: React.FC = () => {
   const projectState = useAppSelector((state) => state.projectState);
+  const dispatch = useAppDispatch();
   
   const [messages, setMessages] = useState<ChatMessage[]>([{
     id: crypto.randomUUID(),
@@ -46,6 +49,7 @@ export const AIChatSidebar: React.FC = () => {
     content: "こんにちは！動画編集の指示や改善したい点を入力してください。例えば『このシーンの無音区間探して』『60秒の縦向きハイライトを作って』など。"
   }]);
   const [input, setInput] = useState("");
+  const [isComposing, setIsComposing] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -57,6 +61,39 @@ export const AIChatSidebar: React.FC = () => {
 
   const abortRef = useRef<AbortController | null>(null);
 
+  // commands ルータ: Geminiからのcommand配列を実行
+  const applyCommands = async (payload: any) => {
+    const cmds: any[] = payload?.commands ?? [];
+    for (const cmd of cmds) {
+      switch (cmd?.type) {
+        case 'cut': {
+          let ms: number | undefined = undefined;
+          if (cmd?.target?.start_ms != null && !Number.isNaN(cmd.target.start_ms)) {
+            ms = Number(cmd.target.start_ms);
+          } else if (cmd?.target?.end_ms != null && !Number.isNaN(cmd.target.end_ms)) {
+            ms = Number(cmd.target.end_ms);
+          }
+          if (ms != null) {
+            const sec = Math.max(0, ms / 1000);
+            dispatch(setCurrentTime(sec));
+          }
+          dispatch(splitAtCurrentTime());
+          break;
+        }
+        // 予備: 将来拡張
+        case 'delete_active':
+          dispatch(deleteActiveElement());
+          break;
+        case 'duplicate_active':
+          dispatch(duplicateActiveElement());
+          break;
+        default:
+          // 未対応コマンドは無視
+          break;
+      }
+    }
+  };
+
   const send = async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
@@ -66,11 +103,11 @@ export const AIChatSidebar: React.FC = () => {
     const controller = new AbortController();
     abortRef.current = controller;
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: trimmed };
-    const placeholder: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: "Gemini思考中...", thinking: true };
+  const placeholder: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: "", thinking: true };
     setMessages(prev => [...prev, userMsg, placeholder]);
     setInput("");
     try {
-      const res = await fetch('/api/ai/chat/stream', {
+  const res = await fetch('/api/ai/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })) ,projectState}),
@@ -79,19 +116,58 @@ export const AIChatSidebar: React.FC = () => {
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let accum = "";
+  const reader = res.body?.getReader();
       if (!reader) throw new Error('No reader');
+      const decoder = new TextDecoder();
+
+      // SSEフレームパーサ
+      let buffer = '';
+      let currentEvent: string | null = null;
+      let currentData: string[] = [];
+  let uiAccum = '';
+
+      const flushEvent = async () => {
+        if (!currentEvent) return;
+        const dataStr = currentData.join('\n');
+        if (currentEvent === 'ui') {
+          uiAccum += dataStr;
+          setMessages(prev => prev.map(m => m.id === placeholder.id ? { ...m, thinking: false, content: uiAccum } : m));
+        } else if (currentEvent === 'commands') {
+          try {
+            const parsed = JSON.parse(dataStr);
+            await applyCommands(parsed);
+          } catch (e) {
+            // noop
+          }
+        } else if (currentEvent === 'error') {
+          setMessages(prev => prev.map(m => m.id === placeholder.id ? { ...m, thinking: false, content: `エラー: ${dataStr}` } : m));
+        } else if (currentEvent === 'end') {
+          // 終了
+        }
+        currentEvent = null;
+        currentData = [];
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        accum += decoder.decode(value, { stream: true });
-        const partial = accum;
-        setMessages(prev => prev.map(m => m.id === placeholder.id ? { ...m, thinking: false, content: partial } : m));
+        buffer += decoder.decode(value, { stream: true });
+        // フレーム区切りは空行\n\n
+        let idx: number;
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          const frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          const lines = frame.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              currentEvent = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              currentData.push(line.slice(5).trim());
+            } // ignore comments ':' and others
+          }
+          await flushEvent();
+        }
       }
-      // 最終 flush
-      setMessages(prev => prev.map(m => m.id === placeholder.id ? { ...m, thinking: false, content: accum } : m));
     } catch (e: any) {
       if (e.name === 'AbortError') return;
       setMessages(prev => prev.map(m => m.id === placeholder.id ? { ...m, thinking: false, content: `エラー: ${e.message}` } : m));
@@ -99,11 +175,17 @@ export const AIChatSidebar: React.FC = () => {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // 日本語入力などの変換中(IME)は送信しない
+    // Chrome/Edge等: e.nativeEvent.isComposing で検出
+    const composing = (e as any)?.nativeEvent?.isComposing || isComposing;
+    if (e.key === "Enter" && !e.shiftKey && !composing) {
       e.preventDefault();
       send();
     }
   };
+
+  const onCompositionStart = () => setIsComposing(true);
+  const onCompositionEnd = () => setIsComposing(false);
 
   return (
     <>
@@ -145,6 +227,8 @@ export const AIChatSidebar: React.FC = () => {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={onKeyDown}
+              onCompositionStart={onCompositionStart}
+              onCompositionEnd={onCompositionEnd}
               placeholder="指示を入力（Enterで送信 / Shift+Enterで改行）"
               className="w-full bg-transparent outline-none resize-none p-2 text-[13px] h-24 leading-relaxed text-gray-200 placeholder-gray-500"
             />
