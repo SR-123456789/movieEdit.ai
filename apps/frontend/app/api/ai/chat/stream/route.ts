@@ -42,9 +42,12 @@ export async function POST(req: NextRequest) {
       return new Response('messages must be a non-empty array', { status: 400 });
     }
 
+
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const lastUser = messages.filter(m => m.role === 'user').slice(-1)[0] || messages[messages.length - 1];
     const userPrompt = `${lastUser.content}\n[projectState]\n${safeStringify(projectState ?? {}, 2000)}`;
+
+        console.log({ messages, projectState, lastUser, userPrompt });
 
     const model = genAI.getGenerativeModel({ model: MODEL_NAME, systemInstruction: SYSTEM_INSTRUCTION });
     const streamResult: GenerateContentStreamResult = await model.generateContentStream({
