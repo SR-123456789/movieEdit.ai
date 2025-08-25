@@ -1,5 +1,5 @@
 "use client";
-import { useAppSelector, useAppDispatch } from "@/app/store";
+import { useAppSelector, useAppDispatch, store } from "@/app/store";
 import { splitAtCurrentTime, deleteActiveElement, duplicateActiveElement, splitClipByIdAtSourceTime } from "@/app/store/thunks/editorThunks";
 import { setCurrentTime } from "@/app/store/slices/projectSlice";
 import React, { useState, useEffect, useRef, KeyboardEvent } from "react";
@@ -51,6 +51,7 @@ export const AIChatSidebar: React.FC = () => {
   const [input, setInput] = useState("");
   const [isComposing, setIsComposing] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [continueStreak, setContinueStreak] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // 新規メッセージ毎にスクロール
@@ -110,10 +111,17 @@ export const AIChatSidebar: React.FC = () => {
     setMessages(prev => [...prev, userMsg, placeholder]);
     setInput("");
     try {
+      // 1回分の実行で continue 指示が出たかどうかを保持
+      let shouldContinue = false;
+      let nextStreak = continueStreak;
   const res = await fetch('/api/ai/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })) ,projectState}),
+        body: JSON.stringify({
+          messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })),
+          projectState: store.getState().projectState,
+          continueNumber: continueStreak
+        }),
         signal: controller.signal
       });
       if (!res.ok) {
@@ -139,6 +147,15 @@ export const AIChatSidebar: React.FC = () => {
           try {
             const parsed = JSON.parse(dataStr);
             await applyCommands(parsed);
+            // 継続制御
+            const cont = !!parsed?.continue;
+            if (cont) {
+              shouldContinue = true;
+              nextStreak = continueStreak + 1;
+            } else {
+              shouldContinue = false;
+              nextStreak = 0;
+            }
           } catch (e) {
             // noop
           }
@@ -169,6 +186,74 @@ export const AIChatSidebar: React.FC = () => {
             } // ignore comments ':' and others
           }
           await flushEvent();
+        }
+      }
+
+      // 応答終了後、継続要求があれば自動で再リクエスト
+      if (shouldContinue) {
+        // 5回以上連続は確認を挟む
+        if (nextStreak >= 5) {
+          const ok = typeof window !== 'undefined' ? window.confirm(`AIが${nextStreak}回連続で処理継続を要求しています。続けますか？`) : false;
+          if (!ok) {
+            setContinueStreak(0);
+            return;
+          }
+        }
+        setContinueStreak(nextStreak);
+        // 続き用のプレースホルダ
+        const followPlaceholder: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: "", thinking: true };
+        setMessages(prev => [...prev, followPlaceholder]);
+
+        // 2回目以降の実行
+        const res2 = await fetch('/api/ai/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })),
+            projectState: store.getState().projectState,
+            continueNumber: nextStreak
+          })
+        });
+        const reader2 = res2.body?.getReader();
+        if (reader2) {
+          const decoder2 = new TextDecoder();
+          let buffer2 = '';
+          let currentEvent2: string | null = null;
+          let currentData2: string[] = [];
+          let uiAccum2 = '';
+          const flush2 = async () => {
+            if (!currentEvent2) return;
+            const dataStr = currentData2.join('\n');
+            if (currentEvent2 === 'ui') {
+              uiAccum2 += dataStr;
+              setMessages(prev => prev.map(m => m.id === followPlaceholder.id ? { ...m, thinking: false, content: uiAccum2 } : m));
+            } else if (currentEvent2 === 'commands') {
+              try {
+                const parsed = JSON.parse(dataStr);
+                await applyCommands(parsed);
+                // 継続の連鎖がさらに要求された場合は、次のループに任せる（ここでは打ち切り）
+                const cont = !!parsed?.continue;
+                if (cont) setContinueStreak(v => v + 1); else setContinueStreak(0);
+              } catch {}
+            }
+            currentEvent2 = null; currentData2 = [];
+          };
+          while (true) {
+            const { done, value } = await reader2.read();
+            if (done) break;
+            buffer2 += decoder2.decode(value, { stream: true });
+            let idx2: number;
+            while ((idx2 = buffer2.indexOf('\n\n')) !== -1) {
+              const frame = buffer2.slice(0, idx2);
+              buffer2 = buffer2.slice(idx2 + 2);
+              const lines = frame.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('event:')) currentEvent2 = line.slice(6).trim();
+                else if (line.startsWith('data:')) currentData2.push(line.slice(5).trim());
+              }
+              await flush2();
+            }
+          }
         }
       }
     } catch (e: any) {

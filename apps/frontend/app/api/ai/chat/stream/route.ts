@@ -17,6 +17,8 @@ const SYSTEM_INSTRUCTION = `あなたは動画編集支援AIです。出力は�
 【フェーズB：編集コマンド（厳密JSON）】
 [CMD_JSON_START]
 {
+  "continue": boolean,             // さらに処理が必要なら true。完了なら false か省略
+  "continueNumber": number,        // 連続で continue した回数。クライアントが送ってくる値を基準に増加
   "commands": [
     {
       "type": "cut" | "insert_broll" | "add_captions" | "detect_silence" | "extract_short" | "speed_change" | "volume_adjust",
@@ -45,6 +47,12 @@ projectStatus:{
   必ず、startTime < targetTime< endTimeにしてください。
   カットされたクリップは二つに分割され, それぞれのクリップは新しいIDを持ちます。
 
+[継続出力のルール]
+- 1回の応答で完了できない場合は "continue": true を返す。
+- 連続継続回数は "continueNumber" に反映する（クライアントから渡される最新値を基準に、必要なら +1 して返す）。
+- 同じ作業の継続でない場合は continue=false とし、continueNumber は 0 に戻す。
+- 5回以上の連続継続は避け、必要な追加情報をUIで質問してから次に進め。JSONでは continue=false を返すか、要件が明確なら最小回数で完了させること。
+
 
 【制約】
 - 不明点は推測しない。分からなければ commands は空配列に。
@@ -55,7 +63,7 @@ export async function POST(req: NextRequest) {
     if (!process.env.GEMINI_API_KEY) {
       return new Response('Missing GEMINI_API_KEY', { status: 500 });
     }
-    const { messages, projectState } = await req.json() as { messages: Msg[]; projectState?: any };
+  const { messages, projectState, continueNumber } = await req.json() as { messages: Msg[]; projectState?: any; continueNumber?: number };
     if (!Array.isArray(messages) || messages.length === 0) {
       return new Response('messages must be a non-empty array', { status: 400 });
     }
@@ -63,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const lastUser = messages.filter(m => m.role === 'user').slice(-1)[0] || messages[messages.length - 1];
-    const userPrompt = `${lastUser.content}\n[projectState]\n${safeStringify(projectState ?? {}, 2000)}`;
+  const userPrompt = `${lastUser.content}\n[projectState]\n${safeStringify(projectState ?? {}, 2000)}\n[control]\n{"continueNumber": ${Number(continueNumber ?? 0)}}`;
 
         console.log({ messages, projectState, lastUser, userPrompt });
 
